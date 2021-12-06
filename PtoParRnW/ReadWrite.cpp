@@ -4,6 +4,11 @@
 
 #include "stddcls.h"
 #include "driver.h"
+#define S_BUSY 0x80
+#define S_ACK 0x40
+#define S_PAPER_END 0x20
+#define S_SELECT_IN 0x10
+#define S_nERROR 0x08
 
 VOID OnCancelReadWrite(PDEVICE_OBJECT fdo, PIRP Irp);
 
@@ -68,10 +73,38 @@ NTSTATUS DispatchRead(PDEVICE_OBJECT fdo, PIRP Irp)
 
 	PUCHAR pDato = (PUCHAR)Irp->AssociatedIrp.SystemBuffer;
 	unsigned char dato;
-	dato=READ_PORT_UCHAR((unsigned char *)0x379);
+	
+	//GET algorithm
+	unsigned char mask_status[]={ S_BUSY, S_PAPER_END, S_SELECT_IN, S_nERROR,
+								  S_BUSY, S_PAPER_END, S_SELECT_IN, S_nERROR};
+	unsigned char status;
+	unsigned char MASK_CTL=0x0B;
+	unsigned char MASK_STS=0x80;
+	unsigned char data=0;
+	unsigned int i;
+	unsigned int aux=0x01;
+	unsigned int control;
+
+	for( i=0; i < 8; i++, aux<<1) {
+		if(i==0) {
+			control=READ_PORT_UCHAR((unsigned char *)0x37A)^MASK_CTL;
+			control=control&0xF7;
+			WRITE_PORT_UCHAR((unsigned char *)0x37A,control^MASK_CTL);
+			status=READ_PORT_UCHAR((unsigned char *)0x379)^MASK_STS;
+		} else if(i==4) {
+			control=READ_PORT_UCHAR((unsigned char *)0x37A)^MASK_CTL;
+			control=control|0x08;
+			WRITE_PORT_UCHAR((unsigned char *)0x37A,control^MASK_CTL);
+			status=READ_PORT_UCHAR((unsigned char *)0x379)^MASK_STS;
+		}
+
+		if ((status&mask_status[i])!=0)
+			dato=dato|aux;
+	}
+	
 	Irp->IoStatus.Status = STATUS_SUCCESS;
 	Irp->IoStatus.Information = 1;
-	*pDato=pdx->datoDD++;//dato;
+	*pDato=pdx->datoDD;				// Simulated value.
 	return STATUS_SUCCESS;
 }							// DispatchRead
 
