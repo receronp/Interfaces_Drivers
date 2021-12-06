@@ -82,7 +82,28 @@ NTSTATUS DispatchWrite(PDEVICE_OBJECT fdo, PIRP Irp)
 
 	PUCHAR pDato = (PUCHAR)Irp->AssociatedIrp.SystemBuffer;
 	unsigned char dato = (unsigned char)*pDato;
-	WRITE_PORT_UCHAR((unsigned char *)0x378, dato);
+	unsigned char MSK_CTRL = 0x0B;
+	unsigned char control;
+	unsigned char digits[] = {	0x3F, 0x06, 0x5B, 0x4F, 0x66,
+								0x6D, 0x7D, 0x07, 0x7F, 0x6F};
+//								0x77, 0x7C, 0x39, 0x5F, 0x79, 0x71};
+
+	control = READ_PORT_UCHAR((unsigned char *)0x37A)^MSK_CTRL;
+	control = control & 0xFE;
+	WRITE_PORT_UCHAR((unsigned char *)0x37A, control^MSK_CTRL);
+
+	if(dato / 10 == 0) {
+		WRITE_PORT_UCHAR((unsigned char *)0x378, digits[dato%10]);
+		pdx->datoDD = digits[dato%10];
+	} else {
+		WRITE_PORT_UCHAR((unsigned char *)0x378, 0xFF);
+		pdx->datoDD = 0xFF;
+	}
+
+	control = control | 0x01;
+	WRITE_PORT_UCHAR((unsigned char *)0x37A, control^MSK_CTRL);
+
+
 	Irp->IoStatus.Status = STATUS_SUCCESS;
 	Irp->IoStatus.Information = 1;
 	return STATUS_SUCCESS;
